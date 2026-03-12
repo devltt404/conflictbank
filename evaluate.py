@@ -86,7 +86,7 @@ def process_json_file(json_file_path, default_root):
                 predictions.append(data['prediction'])
                 true_labels.append(data['true_label'])
                 replaced_labels.append(data['replaced_label'])
-                uncertain_labels.append(data['uncertain_label'])
+                uncertain_labels.append(data['uncertain_option'])
                 probabilities = list(data["prob"].values())
                 entropy = calculate_entropy(probabilities)
                 entropies.append(entropy)

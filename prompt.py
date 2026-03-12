@@ -118,7 +118,8 @@ def main(in_file, out_dir):
             prompt = prompt_text + '\n\nEvidence: {0}\n{1}\nQuestion: {2}\n{3} in this quesion means {4}\nA. {5}\nB. {6}\nC. {7}\nD. {8}\nAnswer:'.format(data['default_evidence'], data['semantic_conflict_evidence'], data['question'], data['subject'], data['semantic_description'], data['options'][0], data['options'][1], data['options'][2], data['options'][3])
             data = {'prompt': prompt,
                     'true_label': data['correct_option'],
-                    'replaced_label': data['replace_option']}
+                    'replaced_label': data['replace_option'],
+                    'uncertain_option': data['uncertain_option']}
             json_data = json.dumps(data)
             f.write(json_data+'\n')
 
