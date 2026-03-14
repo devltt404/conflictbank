@@ -9,7 +9,7 @@ import os
 num_batch = 5000
 
 model_name = "/mnt/petrelfs/share_data/quxiaoye/models/Meta-Llama-3-70B-Instruct"
-llm = LLM(model=model_name, dtype="float16", tensor_parallel_size=8)
+llm = LLM(model=model_name, dtype="float16", tensor_parallel_size=8, attention_backend=os.environ.get('ATTENTION_BACKEND'))
 sampling_params = SamplingParams(temperature=0, max_tokens=50)
 
 

@@ -48,7 +48,7 @@ def main(model_name, file_path, output_dir, num_batch, conflict_type):
     :param conflict_type: str, type of conflict (e.g., 'correct', 'fact_conflict', 'temporal_conflict', 'semantic_conflict')
     """
     # Initialize the language model with specific configurations
-    llm = LLM(model=model_name, dtype="float16", tensor_parallel_size=8)
+    llm = LLM(model=model_name, dtype="float16", tensor_parallel_size=8, attention_backend=os.environ.get('ATTENTION_BACKEND'))
     sampling_params = SamplingParams(temperature=0, max_tokens=512)
 
     # Templates for generating evidence
