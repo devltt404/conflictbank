@@ -46,16 +46,18 @@ def inference(model_name, input_dir, out_dir):
         
             predictions = []
             probs = []
-            for num in range(len(output)):
-                candidate_logits = []
-                for label in [" A", " B", " C", " D"]:
-                    try:
-                        label_ids = tokenizer.encode(label, add_special_tokens=False)
-                        label_id = label_ids[-1]
-                        candidate_logits.append(output[num].outputs[0].logprobs[0][label_id].logprob)
-                    except:
-                        print(f"Warning: {label} not found. Artificially adding log prob of -100.")
-                        candidate_logits.append(-100)
+            for label in ["A", "B", "C", "D"]:
+                # Search all returned logprobs for any token that decodes to this label
+                found = False
+                for token_id, logprob_obj in output[num].outputs[0].logprobs[0].items():
+                    decoded = tokenizer.decode([token_id]).strip()
+                    if decoded == label:
+                        candidate_logits.append(logprob_obj.logprob)
+                        found = True
+                        break
+                if not found:
+                    print(f"Warning: {label} not found.")
+                    candidate_logits.append(-100)
                 
                 candidate_logits = torch.tensor(candidate_logits).to(torch.float32)
                 prob = torch.nn.functional.softmax(candidate_logits, dim=0).detach().cpu().numpy()
