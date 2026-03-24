@@ -46,25 +46,29 @@ def inference(model_name, input_dir, out_dir):
         
             predictions = []
             probs = []
-            for label in ["A", "B", "C", "D"]:
-                # Search all returned logprobs for any token that decodes to this label
-                found = False
-                for token_id, logprob_obj in output[num].outputs[0].logprobs[0].items():
-                    decoded = tokenizer.decode([token_id]).strip()
-                    if decoded == label:
-                        candidate_logits.append(logprob_obj.logprob)
-                        found = True
-                        break
-                if not found:
-                    print(f"Warning: {label} not found.")
-                    candidate_logits.append(-100)
-                
+
+            
+            for num in range(len(output)):
+                candidate_logits = []
+                for label in ["A", "B", "C", "D"]:
+                    # Search all returned logprobs for any token that decodes to this label
+                    found = False
+                    for token_id, logprob_obj in output[num].outputs[0].logprobs[0].items():
+                        decoded = tokenizer.decode([token_id]).strip()
+                        if decoded == label:
+                            candidate_logits.append(logprob_obj.logprob)
+                            found = True
+                            break
+                    if not found:
+                        print(f"Warning: {label} not found.")
+                        candidate_logits.append(-100)
+                    
                 candidate_logits = torch.tensor(candidate_logits).to(torch.float32)
                 prob = torch.nn.functional.softmax(candidate_logits, dim=0).detach().cpu().numpy()
                 answer = {i: k for i, k in enumerate(["A", "B", "C", "D"])}[np.argmax(prob)]
                 predictions.append(answer)
                 probs.append({'A': float(prob[0]), 'B': float(prob[1]), 'C': float(prob[2]), 'D': float(prob[3])})
-            
+
             output_file = os.path.join(output_dir, os.path.basename(input_file))
             with open(output_file, 'a', encoding='utf-8') as f:
                 for j in range(1000):
