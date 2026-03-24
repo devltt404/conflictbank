@@ -20,7 +20,7 @@ def inference(model_name, input_dir, out_dir):
     print(f"Accessing {torch.cuda.device_count()} GPUs!")
 
     llm = LLM(model=model_name, dtype="float16", tensor_parallel_size=torch.cuda.device_count(), trust_remote_code=True)
-    sampling_params = SamplingParams(logprobs=10)
+    sampling_params = SamplingParams(logprobs=20)
     
     json_files = glob.glob(os.path.join(input_dir, "*.json"))
     output_dir = os.path.join(out_dir, os.path.basename(model_name))
@@ -46,29 +46,23 @@ def inference(model_name, input_dir, out_dir):
         
             predictions = []
             probs = []
-
-            
             for num in range(len(output)):
                 candidate_logits = []
-                for label in ["A", "B", "C", "D"]:
-                    # Search all returned logprobs for any token that decodes to this label
-                    found = False
-                    for token_id, logprob_obj in output[num].outputs[0].logprobs[0].items():
-                        decoded = tokenizer.decode([token_id]).strip()
-                        if decoded == label:
-                            candidate_logits.append(logprob_obj.logprob)
-                            found = True
-                            break
-                    if not found:
-                        print(f"Warning: {label} not found.")
+                for label in [" A", " B", " C", " D"]:
+                    try:
+                        label_ids = tokenizer.encode(label, add_special_tokens=False)
+                        label_id = label_ids[-1]
+                        candidate_logits.append(output[num].outputs[0].logprobs[0][label_id].logprob)
+                    except:
+                        print(f"Warning: {label} not found. Artificially adding log prob of -100.")
                         candidate_logits.append(-100)
-                    
+                
                 candidate_logits = torch.tensor(candidate_logits).to(torch.float32)
                 prob = torch.nn.functional.softmax(candidate_logits, dim=0).detach().cpu().numpy()
                 answer = {i: k for i, k in enumerate(["A", "B", "C", "D"])}[np.argmax(prob)]
                 predictions.append(answer)
                 probs.append({'A': float(prob[0]), 'B': float(prob[1]), 'C': float(prob[2]), 'D': float(prob[3])})
-
+            
             output_file = os.path.join(output_dir, os.path.basename(input_file))
             with open(output_file, 'a', encoding='utf-8') as f:
                 for j in range(1000):
