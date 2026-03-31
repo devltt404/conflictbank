@@ -20,7 +20,7 @@ def inference(model_name, input_dir, out_dir):
     print(f"Accessing {torch.cuda.device_count()} GPUs!")
 
     log_probs = int(os.environ.get("LOG_PROBS", 20))
-    llm = LLM(max_log_probs=log_probs * 2, model=model_name, dtype="float16", tensor_parallel_size=torch.cuda.device_count(), trust_remote_code=True)
+    llm = LLM(max_logprobs=log_probs * 2, model=model_name, dtype="float16", tensor_parallel_size=torch.cuda.device_count(), trust_remote_code=True)
     sampling_params = SamplingParams(logprobs=log_probs)
     
     json_files = glob.glob(os.path.join(input_dir, "*.json"))
