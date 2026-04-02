@@ -8,18 +8,18 @@ from transformers import AutoTokenizer
 from vllm import LLM, SamplingParams
 import numpy as np
 
-def inference(model_name, input_dir, out_dir):
+def inference(model_name, input_dir, out_dir, log_probs):
     """
     Run inference using the specified model on the input JSON files and save the results.
 
     :param model_name: str, name of the pre-trained model
     :param input_dir: str, directory containing input JSON files
     :param out_dir: str, directory to save the output JSON files
+    :param log_probs: int, number of log probabilities to request
     """
     tokenizer = AutoTokenizer.from_pretrained(model_name, add_prefix_space=False, use_fast=False, trust_remote_code=True)
     print(f"Accessing {torch.cuda.device_count()} GPUs!")
 
-    log_probs = int(os.environ.get("LOG_PROBS", 20))
     llm = LLM(max_logprobs=log_probs * 2, model=model_name, dtype="float16", tensor_parallel_size=torch.cuda.device_count(), trust_remote_code=True)
     sampling_params = SamplingParams(logprobs=log_probs)
     
@@ -79,6 +79,7 @@ if __name__ == '__main__':
     parser.add_argument('--model_path', type=str, required=True, help="Path to the pre-trained model.")
     parser.add_argument('--input_dir', type=str, required=True, help="Directory containing input JSON files.")
     parser.add_argument('--out_dir', type=str, required=True, help="Directory to save the output JSON files.")
+    parser.add_argument('--log_probs', type=int, default=20, help="Number of log probabilities to request from the model.")
     args = parser.parse_args()
 
-    inference(args.model_path, args.input_dir, args.out_dir)
+    inference(args.model_path, args.input_dir, args.out_dir, args.log_probs)
