@@ -58,7 +58,7 @@ def inference(model_name, input_dir, out_dir, logprobs):
         
         for i in range(0, len(all_datas), 1000):
             batch_prompts = prompts[i:i + 1000]
-            output = llm.generate(batch_prompts, sampling_params)
+            output = llm.generate(batch_prompts, sampling_params, use_tqdm=False)
         
             predictions = []
             probs = []
