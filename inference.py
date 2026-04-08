@@ -3,6 +3,8 @@ import os
 import argparse
 import torch
 import glob
+import threading
+import time
 from tqdm import tqdm
 from transformers import AutoTokenizer
 from vllm import LLM, SamplingParams
@@ -18,6 +20,17 @@ def inference(model_name, input_dir, out_dir, logprobs):
     :param logprobs: int, number of log probabilities to request
     """
     print(f"Running inference for {model_name} with logprobs={logprobs}...")
+
+    start_time = time.time()
+    stop_timer = threading.Event()
+
+    def print_elapsed():
+        while not stop_timer.wait(300):
+            elapsed = int(time.time() - start_time)
+            print(f"[Elapsed: {elapsed // 3600:02d}:{(elapsed % 3600) // 60:02d}:{elapsed % 60:02d}]")
+
+    timer_thread = threading.Thread(target=print_elapsed, daemon=True)
+    timer_thread.start()
 
     tokenizer = AutoTokenizer.from_pretrained(model_name, add_prefix_space=False, use_fast=False, trust_remote_code=True)
     print(f"Accessing {torch.cuda.device_count()} GPUs!")
@@ -56,9 +69,8 @@ def inference(model_name, input_dir, out_dir, logprobs):
                         label_ids = tokenizer.encode(label, add_special_tokens=False)
                         label_id = label_ids[-1]
                         candidate_logits.append(output[num].outputs[0].logprobs[0][label_id].logprob)
-                    except:
-                        print(f"Warning: {label} not found. Artificially adding log prob of -100.")
-                        candidate_logits.append(-100)
+                    except Exception as e:
+                        raise RuntimeError(f"Error: {label} not found in logprobs. Considering increase logprobs > {logprobs}.") from e
                 
                 candidate_logits = torch.tensor(candidate_logits).to(torch.float32)
                 prob = torch.nn.functional.softmax(candidate_logits, dim=0).detach().cpu().numpy()
@@ -75,6 +87,10 @@ def inference(model_name, input_dir, out_dir, logprobs):
                     data['prediction'] = predictions[j]
                     data['prob'] = probs[j]
                     f.write(json.dumps(data) + '\n')
+
+    stop_timer.set()
+    elapsed = int(time.time() - start_time)
+    print(f"Inference complete. Total time: {elapsed // 3600:02d}:{(elapsed % 3600) // 60:02d}:{elapsed % 60:02d}")
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Run inference on input JSON files using a specified model.")
