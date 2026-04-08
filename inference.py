@@ -25,7 +25,7 @@ def inference(model_name, input_dir, out_dir, logprobs):
     stop_timer = threading.Event()
 
     def print_elapsed():
-        while not stop_timer.wait(300):
+        while not stop_timer.wait(60):
             elapsed = int(time.time() - start_time)
             print(f"[Elapsed: {elapsed // 3600:02d}:{(elapsed % 3600) // 60:02d}:{elapsed % 60:02d}]")
 
