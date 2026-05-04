@@ -1,176 +1,130 @@
+# ConflictBank Survey
 
-# **ConflictBank** 🏦
-## 🎉 Overview
+This repository contains the code used to reproduce and extend the [CONFLICTBANK benchmark](https://arxiv.org/abs/2408.12076) on Qwen 2.5 (0.5B, 3B, 7B) and SmolLM2 (0.36B). The experiments cover retrieved-knowledge conflicts, embedded-knowledge conflicts, and conflict-description effects.
 
-Welcome to **ConflictBank 🏦**, the first comprehensive benchmark for analyzing models' behavior by simulating knowledge conflicts encountered during pre-training and inference stages. This benchmark includes **7,453,853** claim-evidence pairs and **553,117** QA pairs, covering three main conflict causes: misinformation conflict, temporal conflict, and semantic conflict.
+---
 
-This repository includes scripts for downloading the ConflictBank datasets, as well as scripts for evaluating and training models on ConflictBank 🏦.
+## Requirements
 
-## ⚙️ **Installation**
+All experiments were run on **Google Colab Pro** with a single NVIDIA A100 GPU (80 GB VRAM). A high-VRAM GPU is required for inference on the 7B model and for continual pre-training.
 
-Clone this repository and install the required packages:
+Install dependencies:
 
 ```bash
-git clone https://github.com/zhaochen0110/conflictbank.git
-cd conflictbank
 pip install -r requirements.txt
+pip install vllm
 ```
 
-## **📊 Quick Start**
+For Experiment 2, LLaMA Factory is also required:
 
-### **🚧 Data Loading**
+```bash
+pip install "llamafactory[torch,metrics]"
+```
 
-You can obtain ConflictBank through the following code:
+---
+
+## Datasets
+
+The experiments use two datasets from the CONFLICTBANK release on Hugging Face:
+
+- **QA pairs:** [`Warrieryes/CB_qa`](https://huggingface.co/datasets/Warrieryes/CB_qa)
+- **Claim-evidence pairs:** [`Warrieryes/CB_claim_evidence`](https://huggingface.co/datasets/Warrieryes/CB_claim_evidence)
+
+Both datasets are downloaded automatically by the notebooks.
+
+---
+
+## Experiment 1: Retrieved Knowledge Conflicts and Conflict Descriptions
+
+This experiment evaluates model behavior when conflicting evidence is provided at inference time. It also includes the conflict-description variant, where a temporal or semantic description is appended to the question.
+
+**Notebook:** [ConflictBank_Survey_E1.ipynb](ConflictBank_Survey_E1.ipynb)
+
+**Models evaluated:** Qwen2.5-0.5B, Qwen2.5-3B, Qwen2.5-7B, SmolLM2-360M
+
+Open the notebook and follow the cells in order. The notebook handles dataset download, prompt generation ([prompt.py](prompt.py)), inference ([inference.py](inference.py)), and evaluation ([evaluate.py](evaluate.py)). Run it once per model by setting `MODEL_FULL_PATH` in the configuration cell at the top. After running, the results are zipped and saved to `My Drive/Colab_Output/` on your Google Drive. The zip file contains the `results/` folder with the following `.xlsx` output files and a copy of the notebook.
+
+| File | Provides |
+|---|---|
+| `results/<model>/context_conflict.xlsx` | Accuracy and Memorization Ratio per conflict type under single conflicting evidence |
+| `results/<model>/inter_conflict.xlsx` | Same metrics under two-evidence setting (default + conflicting evidence) |
+| `results/<model>/description.xlsx` | Memorization Ratio with and without conflict-context description, for temporal and semantic conflict types |
+
+---
+
+## Experiment 2: Embedded Knowledge Conflicts
+
+This experiment performs continual pre-training with conflicting evidence and measures how it affects the model's internal knowledge.
+
+**Models used:** Qwen2.5-0.5B, Qwen2.5-3B (the 7B model exceeds available GPU memory for training)
+
+**Pre-trained checkpoints** (already available on Hugging Face):
+
+| Checkpoint | Base model | Training ratio |
+|---|---|---|
+| `introtollm/qwen2.5-0.5B-cb-1_0` | Qwen2.5-0.5B | 1:0 (control) |
+| `introtollm/qwen2.5-0.5B-cb-1_1` | Qwen2.5-0.5B | 1:1 (conflict) |
+| `introtollm/qwen2.5-3B-cb-1_0`   | Qwen2.5-3B   | 1:0 (control) |
+| `introtollm/qwen2.5-3B-cb-1_1`   | Qwen2.5-3B   | 1:1 (conflict) |
+
+If you want to use these checkpoints directly, skip to **Step 3**.
+
+### Steps
+
+**Step 1 — Build the known-correct QA subset**
+
+Run [exp2_build_known_QA_dataset.ipynb](exp2_build_known_QA_dataset.ipynb). This identifies 100 QA pairs that the base models answer correctly both with and without default evidence. The output is saved as `known_subset.json`.
+
+**Step 2 — Run continual pre-training**
+
+Run [exp2_run_continual_pretraining.ipynb](exp2_run_continual_pretraining.ipynb). Set the model size and conflict ratio at the top of the notebook:
 
 ```python
-from datasets import load_dataset
-# load the claim-evidence pairs
-dataset = load_dataset("Warrieryes/CB_claim_evidence")
-# load the QA pairs
-dataset = load_dataset("Warrieryes/CB_qa")
+MODEL_SIZE     = "0.5B"   # "0.5B" or "3B"
+CONFLICT_RATIO = "1:1"    # "1:0" (control) or "1:1" (conflict)
 ```
 
-### **💎 Large-scale Evaluation**
+The notebook will:
+1. Stream 50,000 evidence passages from `Warrieryes/CB_claim_evidence`.
+2. Build a balanced JSONL training corpus (equal proportions of misinformation, temporal, and semantic conflict).
+3. Write a LLaMA Factory training config and run continual pre-training.
 
-To replicate the experimental results in our paper, run:
+Training hyperparameters (fixed):
 
-```bash
-python inference.py --model_path "$model_path" \
---input_dir "$input_dir" \
---out_dir "$out_dir" 
+| Parameter | Value |
+|---|---|
+| Batch size | 1 |
+| Gradient accumulation | 8 |
+| Max sequence length | 1024 tokens |
+| Max steps | 2109 |
+| Learning rate | 2 × 10⁻⁵ (cosine schedule) |
+| Optimizer | AdamW (β₁=0.9, β₂=0.95, weight decay=0.1) |
+| Precision | bfloat16 |
 
-python evaluate.py "$input_dir/$model_name" "$out_dir" 
-```
+Run this notebook four times to produce the four checkpoints (0.5B × {1:0, 1:1} and 3B × {1:0, 1:1}).
 
-### 🚅 Continual Pre-training
+**Step 3 — Upload checkpoints** *(optional)*
 
-For further analysis, we have released all the LLMs with embedded conflicts used in our experimental analysis.
+Run [exp2_upload_model_to_huggingface.ipynb](exp2_upload_model_to_huggingface.ipynb) to push a trained checkpoint to Hugging Face Hub. This step is needed only if you retrained the models.
 
-You can also train your own model using [llama_factory](https://github.com/hiyouga/LLaMA-Factory) with the following training script:
+**Step 4 — Evaluate**
 
-```bash
-python src/train_bash.py \
---stage pt \
---model_name_or_path $MODEL_PATH \
---do_train \
---dataset $DATA_PATH \
---overwrite_cache \
---finetuning_type full \
---output_dir $OUTPUT_PATH \
---per_device_train_batch_size 32 \
---gradient_accumulation_steps 1 \
---lr_scheduler_type cosine \
---use_fast_tokenizer \
---logging_steps 1 \
---max_steps 4500 \
---learning_rate 2e-5 \
---fsdp "shard_grad_op auto_wrap" \
---fsdp_transformer_layer_cls_to_wrap 'LlamaDecoderLayer' \
---save_steps 10000 \
---flash_attn \
---save_safetensors False \
---plot_loss \
---report_to wandb \
---overwrite_output_dir \
---cache_path $TOKENIZER_PATH \
---max_length 4096 \
---bf16
-```
+Run [exp2_main_run.ipynb](exp2_main_run.ipynb). Upload `known_subset.json` to `/content/` in Colab. The notebook loads all four checkpoints from Hugging Face, evaluates them on the 100-question subset, and produces:
+- OAR without evidence
+- OAR with default evidence prepended
 
-## **🏗️ Datasets Construction**
+Results are saved to `results_exp3_3.json` and plotted as `figure6_replica.pdf`.
 
-We also provide a detailed pipeline to generate our dataset from scratch.
+---
 
-### Step 1: Download and Setup Wikidata
+## Output Files
 
-First, you'll need to install SLING, a framework for natural language frame semantics, and fetch the relevant datasets:
-
-```bash
-# Install SLING via pip.
-pip3 install https://ringgaard.com/data/dist/sling-3.0.0-py3-none-linux_x86_64.whl
-
-# Download SLING KB and en wikidata mapping.
-sling fetch --dataset kb,mapping --overwrite
-```
-
-### Step 2: Fact Extraction and Conflict Claim Construction
-
-Next, use the provided script to extract facts and construct conflict claims:
-
-```bash
-python3 data_construct.py \
-    --qid_names_file "$QID_NAMES_FILE" \
-    --kb_file "$KB_FILE" \
-    --fact_triples_file "$FACT_TRIPLES_FILE" \
-    --templates_file "$TEMPLATES_FILE" \
-    --conflict_row_output_file "$CONFLICT_ROW_OUTPUT_FILE" \
-    --relation_to_object_output_file "$RELATION_TO_OBJECT_OUTPUT_FILE" \
-    --s_r_object_output_file "$S_R_OBJECT_OUTPUT_FILE" \
-    --fact_conflict_output_file "$FACT_CONFLICT_OUTPUT_FILE"
-
-```
-
-### Step 3: Generate Conflict Evidence
-
-Generate evidence for the conflicts using a pre-trained model. Specify the type of conflict you want to simulate:
-
-```bash
-CONFLICT_TYPE="semantic_conflict" # Options: 'correct', 'fact_conflict', 'temporal_conflict', 'semantic_conflict'
-
-python3 generate_conflicts.py \
-    --model_name "$MODEL_NAME" \
-    --file_path "$FILE_PATH" \
-    --output_dir "$OUTPUT_DIR" \
-    --num_batch "$NUM_BATCH" \
-    --conflict_type "$CONFLICT_TYPE"
-
-```
-
-### Step 4: Quality Control
-
-Finally, run the quality control script to ensure the dataset's integrity and quality:
-
-We use the [**deberta-v3-base-tasksource-nli**](https://huggingface.co/sileod/deberta-v3-base-tasksource-nli) model for NLI tasks and the [**all-mpnet-base-v2**](https://huggingface.co/sentence-transformers/all-mpnet-base-v2) model for sentence embeddings.
-
-You can get the trained confirmation model from this link.
-
-```bash
-python quality_control.py --raw_data_dir \
-    --nli_model deberta-v3-base-tasksource-nli \
-    --embedding_model all-mpnet-base-v2 \
-    --classifier_model sbert_conflict_dict.pth \
-    --selected_raw_data_path selected_data.json \
-    --question_template_path question_templates.json \
-    --output_path test_dataset.json \
-    --relation_to_object relation_to_object.json\
-    --qid_names qid_names.txt \
-    --batch_size 32
-```
-
-## 📬 Contact
-
-For any questions or inquiries, please feel free to open an issue or contact us at [suzhaochen0110@gmail.com].
-
-## 🤝 Contributing
-
-We welcome contributions to ConflictBank! If you have any suggestions or improvements, please open a pull request or contact us directly.
-
-## 📜 License
-
-This project is licensed under the CC BY-SA 4.0 license - see the LICENSE file for details.
-
-
-## **📖 Citation**
-
-Please cite our paper if you use our data, model or code. Please also kindly cite the original dataset papers. 
-
-```
-@article{su2024conflictbank,
-  title={Conflictbank: A benchmark for evaluating the influence of knowledge conflicts in llm},
-  author={Su, Zhaochen and Zhang, Jun and Qu, Xiaoye and Zhu, Tong and Li, Yanshu and Sun, Jiashuo and Li, Juntao and Zhang, Min and Cheng, Yu},
-  journal={arXiv preprint arXiv:2408.12076},
-  year={2024}
-}
-```
+| File | Description |
+|---|---|
+| `results/<model>/context_conflict.xlsx` | Accuracy and Memorization Ratio per conflict type under single conflicting evidence. |
+| `results/<model>/inter_conflict.xlsx` | Same metrics under two-evidence setting (default + conflicting). |
+| `results/<model>/description.xlsx` | Memorization Ratio with and without conflict-context description, for temporal and semantic types. |
+| `results_exp3_3.json` | OAR results for embedded conflicts (Exp 2) |
+| `figure6_replica.pdf` | Bar chart replicating Figure 6 of original paper (Exp 2) |
 
 
