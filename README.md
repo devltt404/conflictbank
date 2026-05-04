@@ -34,7 +34,7 @@ Both datasets are downloaded automatically by the notebooks.
 
 ---
 
-## Experiment 1: Retrieved Knowledge Conflicts and Conflict Descriptions
+## Experiment 1 + 3: Retrieved Knowledge Conflicts and Conflict Descriptions
 
 This experiment evaluates model behavior when conflicting evidence is provided at inference time. It also includes the conflict-description variant, where a temporal or semantic description is appended to the question.
 
@@ -44,11 +44,11 @@ This experiment evaluates model behavior when conflicting evidence is provided a
 
 Open the notebook and follow the cells in order. The notebook handles dataset download, prompt generation ([prompt.py](prompt.py)), inference ([inference.py](inference.py)), and evaluation ([evaluate.py](evaluate.py)). Run it once per model by setting `MODEL_FULL_PATH` in the configuration cell at the top. After running, the results are zipped and saved to `My Drive/Colab_Output/` on your Google Drive. The zip file contains the `results/` folder with the following `.xlsx` output files and a copy of the notebook.
 
-| File | Provides |
-|---|---|
-| `results/<model>/context_conflict.xlsx` | Accuracy and Memorization Ratio per conflict type under single conflicting evidence |
-| `results/<model>/inter_conflict.xlsx` | Same metrics under two-evidence setting (default + conflicting evidence) |
-| `results/<model>/description.xlsx` | Memorization Ratio with and without conflict-context description, for temporal and semantic conflict types |
+| File                                    | Provides                                                                                                                                   |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `results/<model>/context_conflict.xlsx` | Accuracy and Memorization Ratio per conflict type under single conflicting evidence. This is used for Experiment 1.                        |
+| `results/<model>/inter_conflict.xlsx`   | Same metrics under two-evidence setting (default + conflicting evidence). This is used for Experiment 1.                                   |
+| `results/<model>/description.xlsx`      | Memorization Ratio with and without conflict-context description, for temporal and semantic conflict types. This is used for Experiment 3. |
 
 ---
 
@@ -60,11 +60,11 @@ This experiment performs continual pre-training with conflicting evidence and me
 
 **Pre-trained checkpoints** (already available on Hugging Face):
 
-| Checkpoint | Base model | Training ratio |
-|---|---|---|
-| `introtollm/qwen2.5-0.5B-cb-1_0` | Qwen2.5-0.5B | 1:0 (control) |
+| Checkpoint                       | Base model   | Training ratio |
+| -------------------------------- | ------------ | -------------- |
+| `introtollm/qwen2.5-0.5B-cb-1_0` | Qwen2.5-0.5B | 1:0 (control)  |
 | `introtollm/qwen2.5-0.5B-cb-1_1` | Qwen2.5-0.5B | 1:1 (conflict) |
-| `introtollm/qwen2.5-3B-cb-1_0`   | Qwen2.5-3B   | 1:0 (control) |
+| `introtollm/qwen2.5-3B-cb-1_0`   | Qwen2.5-3B   | 1:0 (control)  |
 | `introtollm/qwen2.5-3B-cb-1_1`   | Qwen2.5-3B   | 1:1 (conflict) |
 
 If you want to use these checkpoints directly, skip to **Step 3**.
@@ -85,46 +85,39 @@ CONFLICT_RATIO = "1:1"    # "1:0" (control) or "1:1" (conflict)
 ```
 
 The notebook will:
+
 1. Stream 50,000 evidence passages from `Warrieryes/CB_claim_evidence`.
 2. Build a balanced JSONL training corpus (equal proportions of misinformation, temporal, and semantic conflict).
 3. Write a LLaMA Factory training config and run continual pre-training.
 
 Training hyperparameters (fixed):
 
-| Parameter | Value |
-|---|---|
-| Batch size | 1 |
-| Gradient accumulation | 8 |
-| Max sequence length | 1024 tokens |
-| Max steps | 2109 |
-| Learning rate | 2 × 10⁻⁵ (cosine schedule) |
-| Optimizer | AdamW (β₁=0.9, β₂=0.95, weight decay=0.1) |
-| Precision | bfloat16 |
+| Parameter             | Value                                     |
+| --------------------- | ----------------------------------------- |
+| Batch size            | 1                                         |
+| Gradient accumulation | 8                                         |
+| Max sequence length   | 1024 tokens                               |
+| Max steps             | 2109                                      |
+| Learning rate         | 2 × 10⁻⁵ (cosine schedule)                |
+| Optimizer             | AdamW (β₁=0.9, β₂=0.95, weight decay=0.1) |
+| Precision             | bfloat16                                  |
 
 Run this notebook four times to produce the four checkpoints (0.5B × {1:0, 1:1} and 3B × {1:0, 1:1}).
 
-**Step 3 — Upload checkpoints** *(optional)*
+**Step 3 — Upload checkpoints** _(optional)_
 
 Run [exp2_upload_model_to_huggingface.ipynb](exp2_upload_model_to_huggingface.ipynb) to push a trained checkpoint to Hugging Face Hub. This step is needed only if you retrained the models.
 
 **Step 4 — Evaluate**
 
 Run [exp2_main_run.ipynb](exp2_main_run.ipynb). Upload `known_subset.json` to `/content/` in Colab. The notebook loads all four checkpoints from Hugging Face, evaluates them on the 100-question subset, and produces:
+
 - OAR without evidence
 - OAR with default evidence prepended
 
 Results are saved to `results_exp3_3.json` and plotted as `figure6_replica.pdf`.
 
----
-
-## Output Files
-
-| File | Description |
-|---|---|
-| `results/<model>/context_conflict.xlsx` | Accuracy and Memorization Ratio per conflict type under single conflicting evidence. |
-| `results/<model>/inter_conflict.xlsx` | Same metrics under two-evidence setting (default + conflicting). |
-| `results/<model>/description.xlsx` | Memorization Ratio with and without conflict-context description, for temporal and semantic types. |
-| `results_exp3_3.json` | OAR results for embedded conflicts (Exp 2) |
+| File                  | Description                                              |
+| --------------------- | -------------------------------------------------------- |
+| `results_exp3_3.json` | OAR results for embedded conflicts (Exp 2)               |
 | `figure6_replica.pdf` | Bar chart replicating Figure 6 of original paper (Exp 2) |
-
-
